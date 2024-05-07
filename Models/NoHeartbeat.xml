@@ -1,0 +1,1000 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
+<nta>
+	<declaration>// Configurable variables
+const bool enablePerformanceMeasures = true;
+//MARK:REQUESTINTERVAL_VARIABLE
+const int requestInterval = 7200;
+const int NDC = 99;
+
+const int N = 1;
+typedef int[0,N-1] id_t;
+
+bool inNatTable[N] = {false};
+clock channelIdleTime[N] = {0};
+
+//MARK:PSK[N]_VARIABLE
+bool psk[N] = {false};
+
+//====================================================================//
+//                            Channels
+
+broadcast chan Chello[id_t];
+broadcast chan Shello[id_t];
+broadcast chan ShelloPsk[id_t];
+broadcast chan Ccookie[id_t];
+broadcast chan Scookie[id_t];
+broadcast chan Sfinished[id_t];
+broadcast chan Cfinished[id_t];
+broadcast chan ACK[id_t];
+broadcast chan Sdata[id_t];
+broadcast chan Cdata[id_t];
+broadcast chan ExitGracefully[id_t];
+broadcast chan ConnectionEnded[id_t];
+broadcast chan RequestDataFromClient[id_t];
+broadcast chan WakeUp[id_t];
+broadcast chan FailedToGetData[id_t];
+broadcast chan SendDataToUser[id_t];
+
+//====================================================================//
+//                            Power/Cost
+
+//States
+const int SLEEP = 0;
+const int IDLE = 1;
+const int RUN = 2;
+double statePower[3] = {0.001, 1, 100};
+
+//Actions
+const int SEND = 0;
+const int RECEIVE = 1;
+const int SENDHEARTBEAT = 2;
+const int RECEIVEHEARTBEAT = 3;
+const int CHECKCERT = 4;
+double actionPower[5] = {0.000525, 0.0006, 0.1, 0.1, 0.5};
+
+
+//clock stateTime[N] = {0,0};
+int currentState[N] = {IDLE};
+
+double serverActionPowerConsumption = 0.0;
+double clientActionPowerConsumption = 0.0;
+
+
+</declaration>
+	<template>
+		<name>MaliciousUser</name>
+		<parameter>const id_t id</parameter>
+		<declaration>clock x = 0;</declaration>
+		<location id="id0" x="-119" y="-34">
+			<label kind="invariant" x="-129" y="-17">x&lt;=50</label>
+		</location>
+		<init ref="id0"/>
+		<transition id="id1">
+			<source ref="id0"/>
+			<target ref="id0"/>
+			<label kind="assignment" x="-160" y="-119">x = 0</label>
+			<label kind="comments" x="-178" y="-153">MARK:MTRANS</label>
+			<nail x="-178" y="-119"/>
+			<nail x="-51" y="-119"/>
+		</transition>
+	</template>
+	<template>
+		<name>User</name>
+		<parameter>const id_t id</parameter>
+		<declaration>clock x = 0;
+const int RTTime = 300;</declaration>
+		<location id="id2" x="-459" y="-93">
+		</location>
+		<location id="id3" x="-459" y="0">
+			<label kind="invariant" x="-569" y="-25">x &lt;= RTTime</label>
+		</location>
+		<location id="id4" x="-195" y="0">
+			<label kind="invariant" x="-229" y="17">x&lt;=requestInterval</label>
+		</location>
+		<init ref="id4"/>
+		<transition id="id5">
+			<source ref="id3"/>
+			<target ref="id3"/>
+			<label kind="guard" x="-552" y="68">x == RTTime</label>
+			<label kind="synchronisation" x="-688" y="85">RequestDataFromClient[id]!</label>
+			<label kind="assignment" x="-510" y="102">x = 0</label>
+			<nail x="-459" y="68"/>
+			<nail x="-527" y="68"/>
+			<nail x="-527" y="0"/>
+		</transition>
+		<transition id="id6">
+			<source ref="id2"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="-391" y="-85">SendDataToUser[id]?</label>
+			<label kind="assignment" x="-391" y="-68">x=0</label>
+			<nail x="-416" y="-51"/>
+			<nail x="-195" y="-51"/>
+		</transition>
+		<transition id="id7">
+			<source ref="id3"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="-416" y="51">ConnectionEnded[id]?</label>
+			<nail x="-323" y="51"/>
+		</transition>
+		<transition id="id8">
+			<source ref="id2"/>
+			<target ref="id4"/>
+			<label kind="synchronisation" x="-391" y="-127">ConnectionEnded[id]?</label>
+			<label kind="assignment" x="-391" y="-110">x=0</label>
+			<nail x="-195" y="-93"/>
+		</transition>
+		<transition id="id9">
+			<source ref="id3"/>
+			<target ref="id2"/>
+			<label kind="synchronisation" x="-535" y="-76">ACK[id]?</label>
+			<label kind="assignment" x="-535" y="-59">x=0</label>
+		</transition>
+		<transition id="id10">
+			<source ref="id4"/>
+			<target ref="id3"/>
+			<label kind="synchronisation" x="-441" y="-25">RequestDataFromClient[id]!</label>
+			<label kind="assignment" x="-442" y="-42">x = 0</label>
+		</transition>
+	</template>
+	<template>
+		<name>Server</name>
+		<parameter>const id_t id</parameter>
+		<declaration>clock x = 0;
+//MARK:MAXRT_VARIABLE
+const int maxRT = 10;
+int RTCount = 0;
+//MARK:SENTCOOKIES_VARIABLE
+bool SentCookies = false;
+//MARK:RTTIME_VARIABLE
+const int RTTime = 200;
+const int dataRTTime = 200;
+
+int heartbeatCounter = 0;
+int heartbeatFails = 0;
+
+void DoAction(int action, int bytes){
+    if (enablePerformanceMeasures) {
+        serverActionPowerConsumption = serverActionPowerConsumption + actionPower[action]*bytes;
+    }
+}
+
+void reset() {
+    x = 0;
+    RTCount = 0;
+}
+
+bool resend(int localMaxRT) {
+    // return (x == RTTime) &amp;&amp; (RTCount &lt; localMaxRT);
+    return (RTCount &lt; localMaxRT);
+}
+
+bool leave(int localMaxRT) {
+    return RTCount&gt;=localMaxRT;
+}
+
+void updateForRT() {
+    RTCount++;
+    x = 0;
+}
+</declaration>
+		<location id="id11" x="-10021" y="-11475">
+			<urgent/>
+		</location>
+		<location id="id12" x="-10310" y="-11475">
+			<name x="-10370" y="-11500">SIdle</name>
+		</location>
+		<location id="id13" x="-10794" y="-11476">
+			<name x="-10854" y="-11485">Reset</name>
+			<committed/>
+		</location>
+		<location id="id14" x="-10795" y="-10820">
+			<urgent/>
+		</location>
+		<location id="id15" x="-10565" y="-11322">
+			<name x="-10574" y="-11305">HelloRetryRequest</name>
+			<urgent/>
+		</location>
+		<location id="id16" x="-10047" y="-11203">
+			<name x="-10030" y="-11203">ClientHelloCookie</name>
+			<urgent/>
+		</location>
+		<location id="id17" x="-10310" y="-11016">
+			<name x="-10438" y="-11015">ServerFinished</name>
+			<label kind="invariant" x="-10395" y="-10998">x&lt;=RTTime</label>
+		</location>
+		<location id="id18" x="-10310" y="-10846">
+			<name x="-10268" y="-10855">ClientFinished</name>
+			<urgent/>
+		</location>
+		<location id="id19" x="-10633" y="-10846">
+			<name x="-10710" y="-10829">RequestData</name>
+			<label kind="invariant" x="-10693" y="-10812">x&lt;=RTTime</label>
+		</location>
+		<location id="id20" x="-10540" y="-11475">
+			<committed/>
+		</location>
+		<branchpoint id="id21" x="-10387" y="-11407"/>
+		<branchpoint id="id22" x="-10310" y="-11203"/>
+		<branchpoint id="id23" x="-10047" y="-11016"/>
+		<branchpoint id="id24" x="-10489" y="-10846"/>
+		<init ref="id12"/>
+		<transition id="id25">
+			<source ref="id20"/>
+			<target ref="id12"/>
+			<label kind="comments" x="-10557" y="-11483">MARK:SENTCTRANS_TRANSITION</label>
+		</transition>
+		<transition id="id26">
+			<source ref="id19"/>
+			<target ref="id18"/>
+			<label kind="guard" x="-10506" y="-10820">resend(maxRT) &amp;&amp; 
+x &gt;= RTTime - 10</label>
+			<label kind="assignment" x="-10506" y="-10786">updateForRT()</label>
+			<nail x="-10548" y="-10820"/>
+			<nail x="-10387" y="-10820"/>
+		</transition>
+		<transition id="id27">
+			<source ref="id14"/>
+			<target ref="id13"/>
+			<label kind="synchronisation" x="-10973" y="-10863">SendDataToUser[id]!</label>
+		</transition>
+		<transition id="id28">
+			<source ref="id11"/>
+			<target ref="id12"/>
+			<label kind="synchronisation" x="-10208" y="-11441">WakeUp[id]!</label>
+			<label kind="assignment" x="-10208" y="-11424">x = 0,
+DoAction(SEND, 10)</label>
+			<nail x="-10106" y="-11441"/>
+			<nail x="-10225" y="-11441"/>
+		</transition>
+		<transition id="id29">
+			<source ref="id12"/>
+			<target ref="id11"/>
+			<label kind="synchronisation" x="-10276" y="-11509">RequestDataFromClient[id]?</label>
+			<label kind="assignment" x="-10132" y="-11492">reset()</label>
+		</transition>
+		<transition id="id30">
+			<source ref="id19"/>
+			<target ref="id14"/>
+			<label kind="synchronisation" x="-10786" y="-10854">Cdata[id]?</label>
+		</transition>
+		<transition id="id31">
+			<source ref="id19"/>
+			<target ref="id13"/>
+			<label kind="guard" x="-10786" y="-10914">leave(10)</label>
+			<label kind="synchronisation" x="-10786" y="-10931">FailedToGetData[id]!</label>
+			<nail x="-10795" y="-10897"/>
+			<nail x="-10795" y="-10905"/>
+		</transition>
+		<transition id="id32">
+			<source ref="id17"/>
+			<target ref="id13"/>
+			<label kind="guard" x="-10786" y="-11041">leave(maxRT)</label>
+			<nail x="-10795" y="-11017"/>
+		</transition>
+		<transition id="id33">
+			<source ref="id12"/>
+			<target ref="id16"/>
+			<label kind="guard" x="-10157" y="-11347">SentCookies</label>
+			<label kind="synchronisation" x="-10166" y="-11330">Ccookie[id]?</label>
+			<label kind="assignment" x="-10242" y="-11313">DoAction(RECEIVE, 310)</label>
+			<nail x="-10259" y="-11348"/>
+			<nail x="-10047" y="-11348"/>
+		</transition>
+		<transition id="id34">
+			<source ref="id13"/>
+			<target ref="id20"/>
+			<label kind="synchronisation" x="-10778" y="-11475">ConnectionEnded[id]!</label>
+			<label kind="assignment" x="-10778" y="-11458">SentCookies = false,
+reset()</label>
+		</transition>
+		<transition id="id35">
+			<source ref="id17"/>
+			<target ref="id18"/>
+			<label kind="synchronisation" x="-10302" y="-10964">Cfinished[id]?</label>
+			<label kind="assignment" x="-10302" y="-10947">reset(),
+DoAction(RECEIVE, 100)</label>
+		</transition>
+		<transition id="id36" controllable="false">
+			<source ref="id15"/>
+			<target ref="id21"/>
+			<label kind="assignment" x="-10582" y="-11449">SentCookies = true,
+DoAction(SEND, 100)</label>
+			<nail x="-10565" y="-11407"/>
+		</transition>
+		<transition id="id37">
+			<source ref="id21"/>
+			<target ref="id12"/>
+			<label kind="probability" x="-10353" y="-11407">1</label>
+			<nail x="-10344" y="-11381"/>
+		</transition>
+		<transition id="id38">
+			<source ref="id21"/>
+			<target ref="id12"/>
+			<label kind="synchronisation" x="-10429" y="-11466">Scookie[id]!</label>
+			<label kind="probability" x="-10370" y="-11449">NDC</label>
+			<nail x="-10361" y="-11407"/>
+		</transition>
+		<transition id="id39">
+			<source ref="id12"/>
+			<target ref="id15"/>
+			<label kind="synchronisation" x="-10514" y="-11381">Chello[id]?</label>
+			<label kind="assignment" x="-10514" y="-11364">reset(),
+DoAction(RECEIVE, 250)</label>
+			<nail x="-10310" y="-11322"/>
+		</transition>
+		<transition id="id40">
+			<source ref="id23"/>
+			<target ref="id17"/>
+			<label kind="probability" x="-10174" y="-11007">1</label>
+			<nail x="-10174" y="-10982"/>
+		</transition>
+		<transition id="id41">
+			<source ref="id23"/>
+			<target ref="id17"/>
+			<label kind="synchronisation" x="-10217" y="-11050">ShelloPsk[id]!</label>
+			<label kind="probability" x="-10140" y="-11067">NDC</label>
+		</transition>
+		<transition id="id42">
+			<source ref="id22"/>
+			<target ref="id17"/>
+			<label kind="probability" x="-10285" y="-11177">1</label>
+			<nail x="-10276" y="-11135"/>
+		</transition>
+		<transition id="id43">
+			<source ref="id22"/>
+			<target ref="id17"/>
+			<label kind="synchronisation" x="-10404" y="-11194">Shello[id]!</label>
+			<label kind="probability" x="-10344" y="-11177">NDC</label>
+		</transition>
+		<transition id="id44" controllable="false">
+			<source ref="id16"/>
+			<target ref="id23"/>
+			<label kind="guard" x="-10038" y="-11092">psk[id]</label>
+			<label kind="assignment" x="-10038" y="-11075">x = 0,
+DoAction(SEND, 378)</label>
+		</transition>
+		<transition id="id45" controllable="false">
+			<source ref="id16"/>
+			<target ref="id22"/>
+			<label kind="guard" x="-10259" y="-11228">!psk[id]</label>
+			<label kind="assignment" x="-10259" y="-11262">x = 0,
+DoAction(SEND, 1789)</label>
+		</transition>
+		<transition id="id46">
+			<source ref="id17"/>
+			<target ref="id16"/>
+			<label kind="guard" x="-10208" y="-11152">resend(maxRT) &amp;&amp; 
+x &gt;= RTTime - 10</label>
+			<label kind="assignment" x="-10208" y="-11109">updateForRT()</label>
+			<nail x="-10217" y="-11152"/>
+		</transition>
+		<transition id="id47">
+			<source ref="id24"/>
+			<target ref="id19"/>
+			<label kind="probability" x="-10557" y="-10846">1</label>
+			<nail x="-10548" y="-10829"/>
+		</transition>
+		<transition id="id48">
+			<source ref="id24"/>
+			<target ref="id19"/>
+			<label kind="synchronisation" x="-10591" y="-10888">ACK[id]!</label>
+			<label kind="probability" x="-10557" y="-10871">NDC</label>
+		</transition>
+		<transition id="id49" controllable="false">
+			<source ref="id18"/>
+			<target ref="id24"/>
+			<label kind="assignment" x="-10472" y="-10897">x = 0,
+DoAction(SEND, 100)</label>
+		</transition>
+		<transition id="id50">
+			<source ref="id19"/>
+			<target ref="id18"/>
+			<label kind="synchronisation" x="-10523" y="-10761">Cfinished[id]?</label>
+			<label kind="assignment" x="-10523" y="-10744">reset(),
+DoAction(RECEIVE, 100)</label>
+			<nail x="-10557" y="-10761"/>
+			<nail x="-10370" y="-10761"/>
+		</transition>
+	</template>
+	<template>
+		<name x="9" y="9">Client</name>
+		<parameter>const id_t id</parameter>
+		<declaration>// For testing
+int timesConnected = 0;
+int allHeartbeatSend = 0;
+
+// Place local declarations here.
+bool isCertificateRequested = false;
+bool failureOn = true;
+clock x = 0;
+int maxRT = 4;
+int RTCount = 0;
+int RTTime = 200;
+bool gotData = false;
+int sendHeartbeat = 0;
+int clientHeartbeatTimer = 700;
+
+int heartbeatCounter = 0;
+int heartbeatFails = 0;
+
+
+void ChangeState(int newState){
+    currentState[id] = newState;
+}
+
+void DoAction(int action, int bytes){
+    if (enablePerformanceMeasures) {
+        clientActionPowerConsumption = clientActionPowerConsumption + actionPower[action]*bytes;
+    }
+}
+
+bool resend(int localMaxRT) {
+    // return (x == RTTime) &amp;&amp; (RTCount &lt; localMaxRT);
+    return (RTCount &lt; localMaxRT);
+}
+
+bool leave(int localMaxRT) {
+    return RTCount&gt;=localMaxRT;
+}
+
+void updateForRT() {
+    RTCount++;
+    x = 0;
+}
+
+void reset() {
+    x = 0;
+    RTCount = 0;
+    sendHeartbeat = 0;
+}
+
+void updateHeartbeat() {
+    sendHeartbeat++;
+    allHeartbeatSend++;
+}</declaration>
+		<location id="id51" x="807" y="-416">
+			<name x="790" y="-450">CIdle</name>
+		</location>
+		<location id="id52" x="1181" y="-415">
+			<name x="1162" y="-449">Reset</name>
+			<committed/>
+		</location>
+		<location id="id53" x="586" y="501">
+			<label kind="invariant" x="552" y="518">x&lt;=RTTime</label>
+		</location>
+		<location id="id54" x="807" y="-340">
+			<urgent/>
+		</location>
+		<location id="id55" x="807" y="-178">
+			<name x="705" y="-194">ClientHello</name>
+			<label kind="invariant" x="722" y="-177">x&lt;=RTTime</label>
+		</location>
+		<location id="id56" x="807" y="-76">
+			<name x="603" y="-93">ServerHelloRetryRequest</name>
+			<urgent/>
+		</location>
+		<location id="id57" x="807" y="42">
+			<name x="654" y="25">ClientHelloCookie</name>
+			<label kind="invariant" x="722" y="42">x&lt;=RTTime</label>
+		</location>
+		<location id="id58" x="807" y="204">
+			<name x="671" y="187">ServerFinished</name>
+			<urgent/>
+		</location>
+		<location id="id59" x="807" y="323">
+			<name x="824" y="306">ClientFinished</name>
+			<label kind="invariant" x="824" y="324">x&lt;=RTTime</label>
+		</location>
+		<branchpoint id="id60" x="629" y="442"/>
+		<branchpoint id="id61" x="807" y="-263"/>
+		<branchpoint id="id62" x="807" y="-17"/>
+		<branchpoint id="id63" x="807" y="256"/>
+		<init ref="id51"/>
+		<transition id="id64">
+			<source ref="id53"/>
+			<target ref="id52"/>
+			<label kind="guard" x="1079" y="510">leave(maxRT)</label>
+			<nail x="671" y="535"/>
+			<nail x="1181" y="535"/>
+		</transition>
+		<transition id="id65">
+			<source ref="id60"/>
+			<target ref="id53"/>
+			<label kind="probability" x="578" y="450">1</label>
+			<nail x="569" y="450"/>
+		</transition>
+		<transition id="id66">
+			<source ref="id60"/>
+			<target ref="id53"/>
+			<label kind="synchronisation" x="493" y="416">Cdata[id]!</label>
+			<label kind="probability" x="510" y="433">NDC</label>
+			<nail x="544" y="442"/>
+		</transition>
+		<transition id="id67">
+			<source ref="id51"/>
+			<target ref="id54"/>
+			<label kind="synchronisation" x="705" y="-399">WakeUp[id]?</label>
+			<label kind="assignment" x="620" y="-382">DoAction(RECEIVE, 10)</label>
+		</transition>
+		<transition id="id68" controllable="false">
+			<source ref="id53"/>
+			<target ref="id60"/>
+			<label kind="guard" x="620" y="450">resend(maxRT) &amp;&amp; 
+x &gt;= RTTime - 10</label>
+			<label kind="assignment" x="637" y="433">updateForRT()</label>
+		</transition>
+		<transition id="id69">
+			<source ref="id53"/>
+			<target ref="id51"/>
+			<label kind="synchronisation" x="382" y="501">ConnectionEnded[id]?</label>
+			<nail x="374" y="501"/>
+			<nail x="374" y="-415"/>
+		</transition>
+		<transition id="id70">
+			<source ref="id59"/>
+			<target ref="id53"/>
+			<label kind="guard" x="816" y="476">inNatTable[id]</label>
+			<label kind="synchronisation" x="816" y="459">ACK[id]?</label>
+			<label kind="assignment" x="816" y="425">DoAction(RECEIVE, 100),
+reset()</label>
+			<nail x="807" y="501"/>
+		</transition>
+		<transition id="id71">
+			<source ref="id57"/>
+			<target ref="id58"/>
+			<label kind="guard" x="595" y="76">inNatTable[id]</label>
+			<label kind="synchronisation" x="595" y="93">Shello[id]?</label>
+			<label kind="assignment" x="595" y="110">reset(),
+DoAction(CHECKCERT, 1),
+DoAction(RECEIVE, 1789)</label>
+			<nail x="773" y="119"/>
+		</transition>
+		<transition id="id72">
+			<source ref="id57"/>
+			<target ref="id58"/>
+			<label kind="guard" x="816" y="51">inNatTable[id]</label>
+			<label kind="synchronisation" x="816" y="68">ShelloPsk[id]?</label>
+			<label kind="assignment" x="816" y="85">reset(),
+DoAction(RECEIVE, 378)</label>
+		</transition>
+		<transition id="id73">
+			<source ref="id52"/>
+			<target ref="id51"/>
+			<label kind="assignment" x="1028" y="-416">ChangeState(IDLE),
+reset()</label>
+		</transition>
+		<transition id="id74">
+			<source ref="id59"/>
+			<target ref="id52"/>
+			<label kind="guard" x="1079" y="297">leave(maxRT)</label>
+			<nail x="1181" y="322"/>
+		</transition>
+		<transition id="id75">
+			<source ref="id57"/>
+			<target ref="id52"/>
+			<label kind="guard" x="1079" y="17">leave(maxRT)</label>
+			<nail x="1181" y="42"/>
+		</transition>
+		<transition id="id76">
+			<source ref="id55"/>
+			<target ref="id54"/>
+			<label kind="guard" x="1071" y="-204">leave(maxRT)</label>
+			<nail x="1181" y="-180"/>
+			<nail x="1181" y="-340"/>
+		</transition>
+		<transition id="id77">
+			<source ref="id55"/>
+			<target ref="id56"/>
+			<label kind="guard" x="816" y="-110">inNatTable[id]</label>
+			<label kind="synchronisation" x="815" y="-162">Scookie[id]?</label>
+			<label kind="assignment" x="816" y="-145">reset(),
+DoAction(RECEIVE, 100)</label>
+		</transition>
+		<transition id="id78">
+			<source ref="id61"/>
+			<target ref="id55"/>
+			<label kind="synchronisation" x="841" y="-246">Chello[id]!</label>
+			<label kind="probability" x="842" y="-229">NDC</label>
+			<nail x="833" y="-229"/>
+		</transition>
+		<transition id="id79">
+			<source ref="id61"/>
+			<target ref="id55"/>
+			<label kind="probability" x="799" y="-246">1</label>
+		</transition>
+		<transition id="id80">
+			<source ref="id55"/>
+			<target ref="id54"/>
+			<label kind="guard" x="637" y="-306">resend(maxRT) &amp;&amp; 
+x &gt;= RTTime - 10</label>
+			<label kind="assignment" x="663" y="-272">updateForRT()</label>
+			<nail x="765" y="-272"/>
+		</transition>
+		<transition id="id81" controllable="false">
+			<source ref="id54"/>
+			<target ref="id61"/>
+			<label kind="assignment" x="816" y="-331">x = 0,
+ChangeState(RUN),
+DoAction(SEND, 250)</label>
+		</transition>
+		<transition id="id82">
+			<source ref="id62"/>
+			<target ref="id57"/>
+			<label kind="probability" x="782" y="-25">1</label>
+			<nail x="790" y="0"/>
+		</transition>
+		<transition id="id83">
+			<source ref="id62"/>
+			<target ref="id57"/>
+			<label kind="synchronisation" x="816" y="-8">Ccookie[id]!</label>
+			<label kind="probability" x="816" y="8">NDC</label>
+		</transition>
+		<transition id="id84">
+			<source ref="id57"/>
+			<target ref="id56"/>
+			<label kind="guard" x="629" y="-42">resend(maxRT) &amp;&amp; 
+x &gt;= RTTime - 10</label>
+			<label kind="assignment" x="629" y="-8">updateForRT()</label>
+			<nail x="765" y="-17"/>
+		</transition>
+		<transition id="id85" controllable="false">
+			<source ref="id56"/>
+			<target ref="id62"/>
+			<label kind="assignment" x="816" y="-68">x = 0,
+DoAction(SEND, 310)</label>
+		</transition>
+		<transition id="id86">
+			<source ref="id63"/>
+			<target ref="id59"/>
+			<label kind="probability" x="782" y="256">1</label>
+			<nail x="790" y="281"/>
+		</transition>
+		<transition id="id87">
+			<source ref="id63"/>
+			<target ref="id59"/>
+			<label kind="synchronisation" x="824" y="264">Cfinished[id]!</label>
+			<label kind="probability" x="824" y="281">NDC</label>
+		</transition>
+		<transition id="id88">
+			<source ref="id59"/>
+			<target ref="id58"/>
+			<label kind="guard" x="620" y="239">resend(maxRT) &amp;&amp; 
+x &gt;= RTTime - 10</label>
+			<label kind="assignment" x="637" y="273">updateForRT()</label>
+			<nail x="756" y="264"/>
+		</transition>
+		<transition id="id89" controllable="false">
+			<source ref="id58"/>
+			<target ref="id63"/>
+			<label kind="assignment" x="816" y="213">x = 0,
+DoAction(SEND, 100)</label>
+		</transition>
+	</template>
+	<template>
+		<name>Router</name>
+		<parameter>const id_t id</parameter>
+		<declaration>void updateClock(id_t id) {
+    inNatTable[id] = true;
+    channelIdleTime[id] = 0; 
+}</declaration>
+		<location id="id90" x="0" y="0">
+			<label kind="invariant" x="-246" y="-8">channelIdleTime[id] &lt;= 300</label>
+		</location>
+		<location id="id91" x="535" y="8">
+			<name x="569" y="0">DroppedFromClientNat</name>
+		</location>
+		<init ref="id90"/>
+		<transition id="id92">
+			<source ref="id91"/>
+			<target ref="id90"/>
+			<label kind="synchronisation" x="238" y="178">Cdata[id]?</label>
+			<label kind="assignment" x="238" y="195">updateClock(id)</label>
+			<nail x="272" y="178"/>
+		</transition>
+		<transition id="id93">
+			<source ref="id91"/>
+			<target ref="id90"/>
+			<label kind="synchronisation" x="221" y="93">Cfinished[id]?</label>
+			<label kind="assignment" x="221" y="110">updateClock(id)</label>
+			<nail x="273" y="94"/>
+		</transition>
+		<transition id="id94">
+			<source ref="id91"/>
+			<target ref="id90"/>
+			<label kind="synchronisation" x="221" y="-246">Chello[id]?</label>
+			<label kind="assignment" x="221" y="-229">updateClock(id)</label>
+			<nail x="272" y="-212"/>
+		</transition>
+		<transition id="id95">
+			<source ref="id91"/>
+			<target ref="id90"/>
+			<label kind="synchronisation" x="229" y="-85">Ccookie[id]?</label>
+			<label kind="assignment" x="229" y="-68">updateClock(id)</label>
+			<nail x="272" y="-42"/>
+		</transition>
+		<transition id="id96">
+			<source ref="id90"/>
+			<target ref="id91"/>
+			<label kind="guard" x="170" y="8">channelIdleTime[id] == 300</label>
+			<label kind="assignment" x="178" y="25">inNatTable[id] = false</label>
+		</transition>
+		<transition id="id97">
+			<source ref="id90"/>
+			<target ref="id90"/>
+			<label kind="synchronisation" x="-42" y="289">Cdata[id]?</label>
+			<label kind="assignment" x="-59" y="272">updateClock(id)</label>
+			<nail x="-136" y="127"/>
+			<nail x="-136" y="306"/>
+			<nail x="127" y="306"/>
+			<nail x="127" y="127"/>
+		</transition>
+		<transition id="id98">
+			<source ref="id90"/>
+			<target ref="id90"/>
+			<label kind="synchronisation" x="-42" y="-348">Sdata[id]?</label>
+			<label kind="assignment" x="-59" y="-331">updateClock(id)</label>
+			<nail x="-136" y="-127"/>
+			<nail x="-136" y="-365"/>
+			<nail x="127" y="-365"/>
+			<nail x="127" y="-127"/>
+		</transition>
+		<transition id="id99">
+			<source ref="id90"/>
+			<target ref="id90"/>
+			<label kind="synchronisation" x="-34" y="-289">ACK[id]?</label>
+			<label kind="assignment" x="-59" y="-272">updateClock(id)</label>
+			<nail x="-136" y="-127"/>
+			<nail x="-136" y="-306"/>
+			<nail x="127" y="-306"/>
+			<nail x="127" y="-127"/>
+		</transition>
+		<transition id="id100">
+			<source ref="id90"/>
+			<target ref="id90"/>
+			<label kind="synchronisation" x="-51" y="-212">Sfinished[id]?</label>
+			<label kind="assignment" x="-59" y="-229">updateClock(id)</label>
+			<nail x="-136" y="-127"/>
+			<nail x="-136" y="-246"/>
+			<nail x="127" y="-246"/>
+			<nail x="127" y="-127"/>
+		</transition>
+		<transition id="id101">
+			<source ref="id90"/>
+			<target ref="id90"/>
+			<label kind="synchronisation" x="-51" y="-153">Scookie[id]?</label>
+			<label kind="assignment" x="-68" y="-170">updateClock(id)</label>
+			<nail x="-136" y="-127"/>
+			<nail x="-136" y="-187"/>
+			<nail x="127" y="-187"/>
+			<nail x="127" y="-127"/>
+		</transition>
+		<transition id="id102">
+			<source ref="id90"/>
+			<target ref="id90"/>
+			<label kind="synchronisation" x="-51" y="-93">Shello[id]?</label>
+			<label kind="assignment" x="-68" y="-110">updateClock(id)</label>
+			<nail x="-136" y="-127"/>
+			<nail x="127" y="-127"/>
+		</transition>
+		<transition id="id103">
+			<source ref="id90"/>
+			<target ref="id90"/>
+			<label kind="synchronisation" x="-51" y="229">Cfinished[id]?</label>
+			<label kind="assignment" x="-59" y="212">updateClock(id)</label>
+			<nail x="-136" y="127"/>
+			<nail x="-136" y="246"/>
+			<nail x="127" y="246"/>
+			<nail x="127" y="127"/>
+		</transition>
+		<transition id="id104">
+			<source ref="id90"/>
+			<target ref="id90"/>
+			<label kind="synchronisation" x="-42" y="170">Ccookie[id]?</label>
+			<label kind="assignment" x="-59" y="153">updateClock(id)</label>
+			<nail x="-136" y="127"/>
+			<nail x="-136" y="187"/>
+			<nail x="127" y="187"/>
+			<nail x="127" y="127"/>
+		</transition>
+		<transition id="id105">
+			<source ref="id90"/>
+			<target ref="id90"/>
+			<label kind="synchronisation" x="-42" y="110">Chello[id]?</label>
+			<label kind="assignment" x="-59" y="93">updateClock(id)</label>
+			<nail x="-136" y="127"/>
+			<nail x="127" y="127"/>
+		</transition>
+	</template>
+	<system>// Instanciate systems
+Client0:=Client(0);
+
+Router0:=Router(0);
+
+User0:=User(0);
+
+Server0 := Server(0);
+
+MUser := MaliciousUser(0);
+
+// List one or more processes to be composed into a system.
+//MARK:MUSER_ADD
+system Client0,Server0, Router0, User0;
+
+</system>
+	<queries>
+		<query>
+			<formula>A[] not deadlock</formula>
+			<comment/>
+			<option key="--diagnostic" value="-1"/>
+			<result outcome="success" type="quality" timestamp="2024-05-04 13:22:17 +0200">
+				<option key="--diagnostic" value="-1"/>
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; Server0.Reset</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2024-05-04 13:22:23 +0200">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; Client0.Reset</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2024-05-04 13:22:24 +0200">
+			</result>
+		</query>
+		<query>
+			<formula>E&lt;&gt; Client0.ClientHelloCookie imply Server0.SentCookies</formula>
+			<comment/>
+			<result outcome="success" type="quality" timestamp="2024-05-04 13:22:25 +0200">
+			</result>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+		<query>
+			<formula>E [&lt;=(86400); 2] (max: clientActionPowerConsumption)</formula>
+			<comment/>
+			<result outcome="success" type="quantity" value="≈ 0" timestamp="2024-05-07 14:40:27 +0200">
+				<details>≈ 0</details>
+				<plot title="Probability Density Distribution" xaxis="max: clientActionPowerConsumption" yaxis="probability density">
+					<series title="density" type="b(0.000000)" color="0x0000ff" encoding="csv">0.0,4.503599627370496E15
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">0.0,0.0
+0.0,4.503599627370496E15
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=2.2204e-16, bucket count=1
+Runs: 2 in total, 2 (100%) displayed, 0 (0%) remaining
+Displayed sample set: { 0, 0 }
+Mean estimate of displayed sample: ≈ 0</comment>
+				</plot>
+				<plot title="Probability Distribution" xaxis="max: clientActionPowerConsumption" yaxis="probability">
+					<series title="probability" type="b(0.000000)" color="0x0000ff" encoding="csv">0.0,1.0
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">0.0,0.0
+0.0,1.0
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=2.2204e-16, bucket count=1
+Runs: 2 in total, 2 (100%) displayed, 0 (0%) remaining
+Displayed sample set: { 0, 0 }
+Mean estimate of displayed sample: ≈ 0</comment>
+				</plot>
+				<plot title="Cumulative Probability Distribution" xaxis="max: clientActionPowerConsumption" yaxis="probability">
+					<series title="cumulative" type="l" color="0x000000" encoding="csv">0.0,0.0
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">0.0,0.0
+0.0,1.0
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=2.2204e-16, bucket count=1
+Runs: 2 in total, 2 (100%) displayed, 0 (0%) remaining
+Displayed sample set: { 0, 0 }
+Mean estimate of displayed sample: ≈ 0</comment>
+				</plot>
+				<plot title="Cumulative Probability Confidence Intervals" xaxis="max: clientActionPowerConsumption" yaxis="probability">
+					<series title="upper limit" type="k" color="0x0000dd" encoding="csv">0.0,0.841886116991581
+					</series>
+					<series title="lower limit" type="k" color="0xdd0000" encoding="csv">0.0,0.0
+					</series>
+					<series title="cumulative" type="l" color="0x000000" encoding="csv">0.0,0.0
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">0.0,0.0
+0.0,1.0
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=2.2204e-16, bucket count=1
+Runs: 2 in total, 2 (100%) displayed, 0 (0%) remaining
+Displayed sample set: { 0, 0 }
+Mean estimate of displayed sample: ≈ 0</comment>
+				</plot>
+				<plot title="Frequency Histogram" xaxis="max: clientActionPowerConsumption" yaxis="count">
+					<series title="count" type="b(0.000000)" color="0x0000ff" encoding="csv">0.0,2.0
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">0.0,0.0
+0.0,2.0
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=2.2204e-16, bucket count=1
+Runs: 2 in total, 2 (100%) displayed, 0 (0%) remaining
+Displayed sample set: { 0, 0 }
+Mean estimate of displayed sample: ≈ 0</comment>
+				</plot>
+			</result>
+		</query>
+		<query>
+			<formula/>
+			<comment/>
+		</query>
+		<query>
+			<formula>E [&lt;=(86400); 2] (max: serverActionPowerConsumption)</formula>
+			<comment/>
+			<result outcome="success" type="quantity" value="440.888 ± 36.9836 (95% CI)" timestamp="2024-05-07 14:43:26 +0200">
+				<details>440.888 ± 36.9836 (95% CI)</details>
+				<plot title="Probability Density Distribution" xaxis="max: serverActionPowerConsumption" yaxis="probability density">
+					<series title="density" type="b(2.910675)" color="0x0000ff" encoding="csv">437.9770500000026,0.1717814596270592
+440.88772500000266,0.1717814596270592
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">440.88772500000266,0.0
+440.88772500000266,0.1717814596270592
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=2.9107, bucket count=2
+Runs: 2 in total, 2 (100%) displayed, 0 (0%) remaining
+Displayed sample set: { 443.8, 438 }
+Mean estimate of displayed sample: 440.9 ± 36.98 (95% CI)</comment>
+				</plot>
+				<plot title="Probability Distribution" xaxis="max: serverActionPowerConsumption" yaxis="probability">
+					<series title="probability" type="b(2.910675)" color="0x0000ff" encoding="csv">437.9770500000026,0.5
+440.88772500000266,0.5
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">440.88772500000266,0.0
+440.88772500000266,0.5
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=2.9107, bucket count=2
+Runs: 2 in total, 2 (100%) displayed, 0 (0%) remaining
+Displayed sample set: { 443.8, 438 }
+Mean estimate of displayed sample: 440.9 ± 36.98 (95% CI)</comment>
+				</plot>
+				<plot title="Cumulative Probability Distribution" xaxis="max: serverActionPowerConsumption" yaxis="probability">
+					<series title="cumulative" type="l" color="0x000000" encoding="csv">437.9770500000026,0.0
+440.88772500000266,0.5
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">440.88772500000266,0.0
+440.88772500000266,1.0
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=2.9107, bucket count=2
+Runs: 2 in total, 2 (100%) displayed, 0 (0%) remaining
+Displayed sample set: { 443.8, 438 }
+Mean estimate of displayed sample: 440.9 ± 36.98 (95% CI)</comment>
+				</plot>
+				<plot title="Cumulative Probability Confidence Intervals" xaxis="max: serverActionPowerConsumption" yaxis="probability">
+					<series title="upper limit" type="k" color="0x0000dd" encoding="csv">437.9770500000026,0.841886116991581
+440.88772500000266,0.9874208829065749
+					</series>
+					<series title="lower limit" type="k" color="0xdd0000" encoding="csv">437.9770500000026,0.0
+440.88772500000266,0.01257911709342505
+					</series>
+					<series title="cumulative" type="l" color="0x000000" encoding="csv">437.9770500000026,0.0
+440.88772500000266,0.5
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">440.88772500000266,0.0
+440.88772500000266,1.0
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=2.9107, bucket count=2
+Runs: 2 in total, 2 (100%) displayed, 0 (0%) remaining
+Displayed sample set: { 443.8, 438 }
+Mean estimate of displayed sample: 440.9 ± 36.98 (95% CI)</comment>
+				</plot>
+				<plot title="Frequency Histogram" xaxis="max: serverActionPowerConsumption" yaxis="count">
+					<series title="count" type="b(2.910675)" color="0x0000ff" encoding="csv">437.9770500000026,1.0
+440.88772500000266,1.0
+					</series>
+					<series title="average" type="pl" color="0x00dd00" encoding="csv">440.88772500000266,0.0
+440.88772500000266,1.0
+					</series>
+					<comment>Parameters: α=0.05, ε=0.05, bucket width=2.9107, bucket count=2
+Runs: 2 in total, 2 (100%) displayed, 0 (0%) remaining
+Displayed sample set: { 443.8, 438 }
+Mean estimate of displayed sample: 440.9 ± 36.98 (95% CI)</comment>
+				</plot>
+			</result>
+		</query>
+	</queries>
+</nta>
