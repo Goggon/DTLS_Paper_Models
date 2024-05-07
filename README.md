@@ -14,6 +14,9 @@ generate.py --uppaal PATH_TO_UPPAAL
 ```
 
 The figures will be generated in the `figures` directory.
+- `Base_case_power.png` = figure 12
+- `Chello_attack.png` = figure 13
+- `SHeartbeat_attack.png` = figure 14
 
 ## Info about the models
 The models are located in the `models` directory. The models are the same as the ones used in the paper.
