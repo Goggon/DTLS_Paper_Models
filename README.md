@@ -18,6 +18,14 @@ The figures will be generated in the `figures` directory.
 - `Chello_attack.png` = figure 13
 - `SHeartbeat_attack.png` = figure 14
 
+## run symbolic verification queries
+Run the following command with the path to the UPPAAL installation directory as an argument:
+```
+run_symbolic.py --uppaal PATH_TO_UPPAAL
+```
+
+This runs the model `NoHeartBeat.xml` with the quries in `NoHeartbeatSymbolic.q`
+
 ## Info about the models
 The models are located in the `models` directory. The models are the same as the ones used in the paper.
 

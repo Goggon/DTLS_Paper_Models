@@ -2,6 +2,7 @@
 <!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.6//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_6.dtd'>
 <nta>
 	<declaration>// Configurable variables
+//MARK:EPM_VARIABLES
 const bool enablePerformanceMeasures = true;
 //MARK:REQUESTINTERVAL_VARIABLE
 const int requestInterval = 7200;
@@ -846,8 +847,12 @@ system Client0,Server0, Router0, User0;
 		<query>
 			<formula>E&lt;&gt; Client0.ClientHelloCookie imply Server0.SentCookies</formula>
 			<comment/>
-			<result outcome="success" type="quality" timestamp="2024-05-04 13:22:25 +0200">
+			<result outcome="success" type="quality" timestamp="2024-05-08 10:52:13 +0200">
 			</result>
+		</query>
+		<query>
+			<formula>A[] Server0.ServerFinished imply Server0.SentCookies</formula>
+			<comment/>
 		</query>
 		<query>
 			<formula/>
