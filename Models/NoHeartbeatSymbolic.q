@@ -19,3 +19,8 @@ E<> Client0.Reset
 E<> Client0.ClientHelloCookie imply Server0.SentCookies
 
 /*
+
+*/
+A[] Server0.ServerHello imply Server0.SentCookies
+
+/*
