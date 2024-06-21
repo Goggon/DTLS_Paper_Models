@@ -2,6 +2,8 @@
 This repository is for reproduction of the figures 12, 13 and 14 from the article Modelling and Analysis of DTLS: Power
 Consumption, and Attacks.
 
+Also the student report "IoT Power Consumption & DTLS Modeling" mentioned in the article is available in this repository.
+
 ## reproduction of figures
 Firstly, the needed pip packages used in the scripts can be gotten via the command:
 ```
